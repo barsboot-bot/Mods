@@ -48,9 +48,16 @@ interface AppState {
   setProjectName: (name: string) => void;
   setProjectDescription: (desc: string) => void;
   setProjectAuthor: (author: string) => void;
-  addFile: (file: ModFile) => void;
+  
+  // File operations with parent support
+  addFile: (file: ModFile, parentId?: string) => void;
   removeFile: (id: string) => void;
   updateFileContent: (id: string, content: string) => void;
+  renameFile: (id: string, newName: string) => void;
+  
+  // UI state
+  selectedFileId: string | null;
+  setSelectedFileId: (id: string | null) => void;
   
   // Configs
   modConfig: ModConfig;
@@ -154,9 +161,32 @@ export const useStore = create<AppState>((set, get) => ({
   setProjectAuthor: (author) => set((state) => ({
     project: { ...state.project, author }
   })),
-  addFile: (file) => set((state) => ({
-    project: { ...state.project, files: [...state.project.files, file] }
-  })),
+  
+  addFile: (file, parentId) => {
+    if (!parentId) {
+      // Добавляем в корень
+      set((state) => ({
+        project: { ...state.project, files: [...state.project.files, file] }
+      }));
+    } else {
+      // Добавляем в указанную папку
+      const addToParent = (files: ModFile[]): ModFile[] => {
+        return files.map(f => {
+          if (f.id === parentId && f.type === 'folder') {
+            return { ...f, children: [...(f.children || []), file] };
+          }
+          if (f.children) {
+            return { ...f, children: addToParent(f.children) };
+          }
+          return f;
+        });
+      };
+      set((state) => ({
+        project: { ...state.project, files: addToParent(state.project.files) }
+      }));
+    }
+  },
+  
   removeFile: (id) => {
     const removeById = (files: ModFile[]): ModFile[] => {
       return files
@@ -170,6 +200,7 @@ export const useStore = create<AppState>((set, get) => ({
       project: { ...state.project, files: removeById(state.project.files) }
     }));
   },
+  
   updateFileContent: (id, content) => {
     const updateContent = (files: ModFile[]): ModFile[] => {
       return files.map(f => {
@@ -182,6 +213,22 @@ export const useStore = create<AppState>((set, get) => ({
       project: { ...state.project, files: updateContent(state.project.files) }
     }));
   },
+  
+  renameFile: (id, newName) => {
+    const renameById = (files: ModFile[]): ModFile[] => {
+      return files.map(f => {
+        if (f.id === id) return { ...f, name: newName };
+        if (f.children) return { ...f, children: renameById(f.children) };
+        return f;
+      });
+    };
+    set((state) => ({
+      project: { ...state.project, files: renameById(state.project.files) }
+    }));
+  },
+  
+  selectedFileId: null,
+  setSelectedFileId: (id) => set({ selectedFileId: id }),
   
   modConfig: defaultModConfig,
   setModConfig: (config) => set((state) => ({
