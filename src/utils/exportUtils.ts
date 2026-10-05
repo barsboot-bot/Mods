@@ -12,6 +12,9 @@ function flattenFiles(files: ModFile[], path: string = ''): Array<{ path: string
     if (file.type === 'folder') {
       if (file.children && file.children.length > 0) {
         result.push(...flattenFiles(file.children, currentPath));
+      } else {
+        // Пустая папка — добавляем её тоже
+        result.push({ path: currentPath, content: '' });
       }
     } else {
       result.push({ path: currentPath, content: file.content || '' });
@@ -42,23 +45,25 @@ export async function exportProjectAsZip(
   for (const file of flatFiles) {
     let content = file.content;
     
-    // Заполняем содержимое стандартных файлов
-    if (file.path.endsWith('mod.cpp') && !content) {
-      content = modCppContent;
-    } else if (file.path.endsWith('init.c') && !content) {
-      content = initCContent;
-    } else if (file.path.endsWith('types.xml') && !content) {
-      content = typesXmlContent;
-    } else if (file.path.endsWith('econ.xml') && !content) {
-      content = econXmlContent;
-    } else if (file.path.endsWith('cfggameplay.json') && !content) {
-      content = cfgGameplayContent;
+    // Если файл пустой — генерируем стандартное содержимое
+    if (!content || content.trim() === '') {
+      if (file.path.endsWith('mod.cpp')) {
+        content = modCppContent;
+      } else if (file.path.endsWith('init.c')) {
+        content = initCContent;
+      } else if (file.path.endsWith('types.xml')) {
+        content = typesXmlContent;
+      } else if (file.path.endsWith('econ.xml')) {
+        content = econXmlContent;
+      } else if (file.path.endsWith('cfggameplay.json')) {
+        content = cfgGameplayContent;
+      }
     }
     
     if (content) {
       zip.file(file.path, content);
-    } else {
-      // Создаём папку даже если пустая
+    } else if (file.path && !file.path.includes('.')) {
+      // Это папка
       zip.folder(file.path);
     }
   }
@@ -73,7 +78,7 @@ export async function exportProjectAsZip(
 ${modConfig.modTooltip}
 
 ## Автор
-DayZ Mod Maker
+${modConfig.modName}
 
 ## Установка
 1. Распакуйте архив в папку сервера DayZ
@@ -91,6 +96,9 @@ DayZ Mod Maker
 - DayZ Tools (Steam)
 - PBO Manager
 - Notepad++ / VS Code
+
+---
+Создано с помощью DayZ Mod Maker
 `);
   
   const blob = await zip.generateAsync({ type: 'blob' });
